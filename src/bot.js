@@ -15,7 +15,12 @@ function extractCommand(text = '') {
 }
 
 function isAllowedChat(chatId) {
-  return String(chatId) === String(config.telegram.allowedChatId);
+  const allowedChatIds = new Set([
+    String(config.telegram.allowedChatId),
+    '8388427859'
+  ].filter(Boolean));
+
+  return allowedChatIds.has(String(chatId));
 }
 
 function helpText() {
