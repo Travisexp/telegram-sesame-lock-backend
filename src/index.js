@@ -8,6 +8,15 @@ const app = express();
 
 app.use(express.json());
 
+app.get('/', (_req, res) => {
+  res.json({
+    ok: true,
+    service: 'telegram-sesame-lock-backend',
+    mode: config.botMode,
+    time: new Date().toISOString()
+  });
+});
+
 app.get('/health', (_req, res) => {
   res.json({
     ok: true,
@@ -64,10 +73,14 @@ async function start() {
   });
 
   if (config.botMode === 'webhook') {
-    await setWebhook();
-    info('telegram.webhook_set', {
-      webhookUrl: config.telegram.webhookUrl
-    });
+    try {
+      await setWebhook();
+      info('telegram.webhook_set', {
+        webhookUrl: config.telegram.webhookUrl
+      });
+    } catch (err) {
+      error('telegram.webhook_set_failed', { message: err.message });
+    }
     return;
   }
 
