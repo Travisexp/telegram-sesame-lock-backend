@@ -18,11 +18,12 @@ async function telegramRequest(method, payload = {}) {
   return body.result;
 }
 
-export async function sendMessage(chatId, text) {
+export async function sendMessage(chatId, text, extra = {}) {
   return telegramRequest('sendMessage', {
     chat_id: chatId,
     text,
-    disable_web_page_preview: true
+    disable_web_page_preview: true,
+    ...extra
   });
 }
 
@@ -34,12 +35,22 @@ export async function sendAnimation(chatId, animation, caption) {
   });
 }
 
+export async function answerCallbackQuery(callbackQueryId, text = '') {
+  return telegramRequest('answerCallbackQuery', {
+    callback_query_id: callbackQueryId,
+    text
+  });
+}
+
 export async function setBotCommands() {
   return telegramRequest('setMyCommands', {
     commands: [
       { command: 'start', description: 'Show help' },
       { command: 'help', description: 'Show help' },
       { command: 'myid', description: 'Show your Telegram chat ID' },
+      { command: 'items', description: 'Choose stock items' },
+      { command: 'cart', description: 'Show cart' },
+      { command: 'submit', description: 'Submit cart for approval' },
       { command: 'request', description: 'Request stock approval' },
       { command: 'addstaff', description: 'Add staff chat ID' },
       { command: 'approve', description: 'Approve item request' },
@@ -54,7 +65,7 @@ export async function setBotCommands() {
 export async function getUpdates(offset) {
   const params = {
     timeout: 25,
-    allowed_updates: ['message']
+    allowed_updates: ['message', 'callback_query']
   };
 
   if (offset) {
@@ -67,7 +78,7 @@ export async function getUpdates(offset) {
 export async function setWebhook() {
   return telegramRequest('setWebhook', {
     url: config.telegram.webhookUrl,
-    allowed_updates: ['message'],
+    allowed_updates: ['message', 'callback_query'],
     secret_token: config.telegram.webhookSecret || undefined
   });
 }

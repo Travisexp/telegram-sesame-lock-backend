@@ -1,4 +1,5 @@
 const orders = new Map();
+const carts = new Map();
 let nextOrderId = 1001;
 
 export function createOrderRequest({ itemName, requesterChatId, requesterName }) {
@@ -33,4 +34,20 @@ export function setOrderStatus(orderId, status, extra = {}) {
 
 export function getOrder(orderId) {
   return orders.get(String(orderId));
+}
+
+export function addCartItem(chatId, itemName) {
+  const key = String(chatId);
+  const cart = carts.get(key) || [];
+  cart.push(itemName);
+  carts.set(key, cart);
+  return cart;
+}
+
+export function getCart(chatId) {
+  return carts.get(String(chatId)) || [];
+}
+
+export function clearCart(chatId) {
+  carts.delete(String(chatId));
 }

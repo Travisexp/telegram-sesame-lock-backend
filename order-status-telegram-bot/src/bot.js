@@ -1,8 +1,9 @@
 import { config } from './config.js';
+import { categoryNames, getCatalogItem, getCategoryItems } from './catalog.js';
 import { info, warn, error } from './logger.js';
-import { createOrderRequest, getOrder, setOrderStatus } from './store.js';
+import { addCartItem, clearCart, createOrderRequest, getCart, getOrder, setOrderStatus } from './store.js';
 import { normalizeStatus, statusChoices, STATUSES } from './statuses.js';
-import { sendAnimation, sendMessage } from './telegram.js';
+import { answerCallbackQuery, sendAnimation, sendMessage } from './telegram.js';
 
 const staffChatIds = new Set(config.telegram.staffChatIds.map(String));
 
@@ -29,11 +30,18 @@ function requesterName(message) {
   return [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'Staff';
 }
 
+function normalizePlainText(text = '') {
+  return text.trim().toLowerCase().replace(/^\//, '');
+}
+
 function helpText(chatId) {
   const sharedCommands = [
     'Stock status bot ready.',
     '',
     'Staff:',
+    '/items',
+    '/cart',
+    '/submit',
     '/request ITEM_NAME',
     '/item ITEM_ID'
   ];
@@ -90,6 +98,84 @@ export async function sendStatusAnimation(chatId, status, orderId = '') {
   await sendAnimation(chatId, animationUrl, caption);
 }
 
+function categoryKeyboard() {
+  const categories = categoryNames();
+  const rows = [];
+  for (let index = 0; index < categories.length; index += 2) {
+    rows.push(categories.slice(index, index + 2).map((category) => ({
+      text: category,
+      callback_data: `cat:${category}`
+    })));
+  }
+  return { inline_keyboard: rows };
+}
+
+function itemsKeyboard(category) {
+  return {
+    inline_keyboard: getCategoryItems(category).map((item, index) => ([
+      {
+        text: item,
+        callback_data: `add:${category}:${index}`
+      }
+    ]))
+  };
+}
+
+async function sendItemsMenu(chatId) {
+  await sendMessage(chatId, 'Choose a Woolworths category:', {
+    reply_markup: categoryKeyboard()
+  });
+}
+
+async function sendCart(chatId) {
+  const cart = getCart(chatId);
+  if (cart.length === 0) {
+    await sendMessage(chatId, 'Cart is empty. Use /items to add stock.');
+    return;
+  }
+
+  await sendMessage(
+    chatId,
+    [
+      'Cart:',
+      ...cart.map((item, index) => `${index + 1}. ${item}`),
+      '',
+      'Send /submit to request approval.'
+    ].join('\n')
+  );
+}
+
+async function submitCart(message) {
+  const chatId = message.chat.id;
+  const cart = getCart(chatId);
+  if (cart.length === 0) {
+    await sendMessage(chatId, 'Cart is empty. Use /items to add stock.');
+    return;
+  }
+
+  const order = createOrderRequest({
+    itemName: cart.join(', '),
+    requesterChatId: chatId,
+    requesterName: requesterName(message)
+  });
+  clearCart(chatId);
+
+  await sendMessage(chatId, `Request sent for approval.\nItem ${order.orderId}:\n${order.itemName}`);
+  await sendMessage(
+    config.telegram.ownerChatId,
+    [
+      'New stock request',
+      `Item ${order.orderId}:`,
+      order.itemName,
+      `From: ${order.requesterName}`,
+      '',
+      `Approve: /approve ${order.orderId}`,
+      `Reject: /reject ${order.orderId}`
+    ].join('\n')
+  );
+  await sendStatusAnimation(config.telegram.ownerChatId, 'pending_approval', order.orderId);
+}
+
 async function notifyOrderStatus(order, status) {
   await sendStatusAnimation(config.telegram.ownerChatId, status, order.orderId);
 
@@ -98,7 +184,50 @@ async function notifyOrderStatus(order, status) {
   }
 }
 
+async function handleCallbackQuery(callbackQuery) {
+  const chatId = callbackQuery?.message?.chat?.id;
+  const data = callbackQuery?.data || '';
+  const callbackId = callbackQuery?.id;
+
+  if (!chatId || !callbackId) {
+    return;
+  }
+
+  if (!isAllowedChat(chatId)) {
+    await answerCallbackQuery(callbackId, 'Unauthorized.');
+    warn('telegram.unauthorized_callback', { chatId });
+    return;
+  }
+
+  if (data.startsWith('cat:')) {
+    const category = data.slice(4);
+    await answerCallbackQuery(callbackId);
+    await sendMessage(chatId, `${category} items:`, {
+      reply_markup: itemsKeyboard(category)
+    });
+    return;
+  }
+
+  if (data.startsWith('add:')) {
+    const [, category, index] = data.split(':');
+    const itemName = getCatalogItem(category, index);
+    if (!itemName) {
+      await answerCallbackQuery(callbackId, 'Item not found.');
+      return;
+    }
+
+    addCartItem(chatId, itemName);
+    await answerCallbackQuery(callbackId, 'Added to cart.');
+    await sendMessage(chatId, `Added to cart:\n${itemName}`);
+  }
+}
+
 export async function handleUpdate(update) {
+  if (update?.callback_query) {
+    await handleCallbackQuery(update.callback_query);
+    return;
+  }
+
   const message = update?.message;
   const text = message?.text;
   const chatId = message?.chat?.id;
@@ -108,6 +237,7 @@ export async function handleUpdate(update) {
   }
 
   const { command, args } = extractCommand(text);
+  const plainText = normalizePlainText(text);
 
   if (command === '/myid') {
     await sendMessage(chatId, `Your Telegram chat ID is:\n${chatId}`);
@@ -127,6 +257,18 @@ export async function handleUpdate(update) {
       case '/start':
       case '/help':
         await sendMessage(chatId, helpText(chatId));
+        break;
+
+      case '/items':
+        await sendItemsMenu(chatId);
+        break;
+
+      case '/cart':
+        await sendCart(chatId);
+        break;
+
+      case '/submit':
+        await submitCart(message);
         break;
 
       case '/addstaff': {
@@ -263,6 +405,21 @@ export async function handleUpdate(update) {
       }
 
       default:
+        if (['item', 'items'].includes(plainText)) {
+          await sendItemsMenu(chatId);
+          break;
+        }
+
+        if (plainText === 'cart') {
+          await sendCart(chatId);
+          break;
+        }
+
+        if (plainText === 'submit') {
+          await submitCart(message);
+          break;
+        }
+
         await sendMessage(chatId, `Unknown command.\n\n${helpText(chatId)}`);
     }
   } catch (err) {
