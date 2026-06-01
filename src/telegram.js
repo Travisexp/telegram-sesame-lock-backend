@@ -26,6 +26,14 @@ export async function sendMessage(chatId, text) {
   });
 }
 
+export async function sendAnimation(chatId, animation, caption) {
+  return telegramRequest('sendAnimation', {
+    chat_id: chatId,
+    animation,
+    caption
+  });
+}
+
 export async function getUpdates(offset) {
   const params = {
     timeout: 25,

@@ -1,12 +1,17 @@
 import express from 'express';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { error, info, warn } from './logger.js';
 import { handleUpdate } from './bot.js';
 import { deleteWebhook, getUpdates, setWebhook } from './telegram.js';
 
 const app = express();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.join(__dirname, '..', 'public');
 
 app.use(express.json());
+app.use('/animations', express.static(path.join(publicDir, 'animations')));
 
 app.get('/', (_req, res) => {
   res.json({

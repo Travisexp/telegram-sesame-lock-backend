@@ -27,6 +27,7 @@ export const config = {
   port: readIntEnv('PORT', 3000),
   nodeEnv: readEnv('NODE_ENV', { defaultValue: 'development' }),
   botMode,
+  publicBaseUrl: readEnv('PUBLIC_BASE_URL'),
   telegram: {
     botToken: readEnv('TELEGRAM_BOT_TOKEN', { required: true }),
     allowedChatId: readEnv('TELEGRAM_ALLOWED_CHAT_ID', { required: true }),

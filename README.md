@@ -16,6 +16,7 @@ Telegram message -> Telegram Bot -> Node.js backend -> CANDY HOUSE Sesame API ->
 - `/lock`
 - `/unlock confirm`
 - `/sync`
+- `/order_preview`
 - Telegram chat allowlist with `TELEGRAM_ALLOWED_CHAT_ID`
 - Local long polling mode
 - Production webhook mode
@@ -117,6 +118,14 @@ Sends the Sesame `sync` command, waits for the command result, then replies with
 
 Frequent sync commands can reduce Sesame battery life.
 
+### `/order_preview`
+
+Sends an animated GIF preview of the order status flow:
+
+```text
+Item Pending -> Pending Approval -> Sent to Merchant -> Delivery
+```
+
 ## Webhook Mode
 
 For production, deploy the app at an HTTPS URL and set:
@@ -124,6 +133,7 @@ For production, deploy the app at an HTTPS URL and set:
 ```env
 BOT_MODE=webhook
 WEBHOOK_URL=https://your-app.example.com/telegram/webhook
+PUBLIC_BASE_URL=https://your-app.example.com
 TELEGRAM_WEBHOOK_SECRET=use_a_long_random_string
 ```
 

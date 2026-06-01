@@ -1,6 +1,6 @@
 import { config } from './config.js';
 import { info, warn, error } from './logger.js';
-import { sendMessage } from './telegram.js';
+import { sendAnimation, sendMessage } from './telegram.js';
 import {
   formatStatus,
   getStatus,
@@ -32,8 +32,21 @@ function helpText() {
     '/battery - show battery level',
     '/lock - lock Sesame',
     '/unlock confirm - unlock Sesame',
-    '/sync - sync Sesame status'
+    '/sync - sync Sesame status',
+    '/order_preview - show order status animation'
   ].join('\n');
+}
+
+function getPublicBaseUrl() {
+  if (config.publicBaseUrl) {
+    return config.publicBaseUrl.replace(/\/$/, '');
+  }
+
+  if (config.telegram.webhookUrl) {
+    return new URL(config.telegram.webhookUrl).origin;
+  }
+
+  throw new Error('PUBLIC_BASE_URL is required to send the animation in polling mode.');
 }
 
 async function replyStatus(chatId, prefix = 'Current status:') {
@@ -117,6 +130,12 @@ export async function handleUpdate(update) {
       case '/sync':
         await runSesameCommand(chatId, 'sync', 'Sync');
         break;
+      case '/order_preview':
+      case '/preview': {
+        const animationUrl = `${getPublicBaseUrl()}/animations/order-status-demo.gif`;
+        await sendAnimation(chatId, animationUrl, 'Order status preview');
+        break;
+      }
       default:
         await sendMessage(chatId, `Unknown command.\n\n${helpText()}`);
     }
