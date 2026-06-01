@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { error, info, warn } from './logger.js';
 import { handleUpdate } from './bot.js';
-import { deleteWebhook, getUpdates, setWebhook } from './telegram.js';
+import { deleteWebhook, getUpdates, setBotCommands, setWebhook } from './telegram.js';
 
 const app = express();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -76,6 +76,13 @@ async function start() {
       mode: config.botMode
     });
   });
+
+  try {
+    await setBotCommands();
+    info('telegram.commands_set');
+  } catch (err) {
+    error('telegram.commands_set_failed', { message: err.message });
+  }
 
   if (config.botMode === 'webhook') {
     try {

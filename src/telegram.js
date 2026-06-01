@@ -34,6 +34,21 @@ export async function sendAnimation(chatId, animation, caption) {
   });
 }
 
+export async function setBotCommands() {
+  return telegramRequest('setMyCommands', {
+    commands: [
+      { command: 'start', description: 'Show bot commands' },
+      { command: 'status', description: 'Show lock status' },
+      { command: 'battery', description: 'Show battery level' },
+      { command: 'lock', description: 'Lock Sesame' },
+      { command: 'unlock', description: 'Unlock Sesame with confirm' },
+      { command: 'sync', description: 'Sync Sesame status' },
+      { command: 'preview', description: 'Show order status animation' },
+      { command: 'order_preview', description: 'Show order status animation' }
+    ]
+  });
+}
+
 export async function getUpdates(offset) {
   const params = {
     timeout: 25,
