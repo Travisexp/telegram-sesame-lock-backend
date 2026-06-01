@@ -15,9 +15,9 @@ SECONDS = 4
 FRAMES = FPS * SECONDS
 
 STEPS = [
-    ("pending", ("Item", "Pending"), "Order received"),
-    ("approval", ("Pending", "Approval"), "Awaiting review"),
-    ("merchant", ("Sent to", "Merchant"), "Merchant notified"),
+    ("pending_approval", ("Pending", "Approval"), "Waiting for approval"),
+    ("approved", ("Approved",), "Approved by owner"),
+    ("merchant_received", ("Merchant", "Received"), "Merchant has item"),
     ("delivery", ("Delivery",), "On the way"),
 ]
 
@@ -36,10 +36,17 @@ COLORS = {
 }
 
 ACTIVE_COLORS = {
-    "pending": COLORS["blue"],
-    "approval": COLORS["amber"],
-    "merchant": COLORS["purple"],
+    "pending_approval": COLORS["blue"],
+    "approved": COLORS["amber"],
+    "merchant_received": COLORS["purple"],
     "delivery": COLORS["teal"],
+}
+
+FILE_NAMES = {
+    "pending_approval": "stock-status-pending-approval.gif",
+    "approved": "stock-status-approved.gif",
+    "merchant_received": "stock-status-merchant-received.gif",
+    "delivery": "stock-status-delivery.gif",
 }
 
 
@@ -125,8 +132,8 @@ def frame_image(target_status, frame):
     card = (34, 34, WIDTH - 34, HEIGHT - 34)
     rounded_rect(draw, card, 18, COLORS["card"], outline=(224, 230, 240), width=2)
 
-    draw.text((62, 58), "Order Status", font=FONT_TITLE, fill=COLORS["ink"])
-    draw.text((64, 94), "Telegram animation update", font=FONT_SMALL, fill=COLORS["muted"])
+    draw.text((62, 58), "Stock Status", font=FONT_TITLE, fill=COLORS["ink"])
+    draw.text((64, 94), "Telegram item approval update", font=FONT_SMALL, fill=COLORS["muted"])
 
     badge = (WIDTH - 260, 58, WIDTH - 62, 98)
     rounded_rect(draw, badge, 10, (238, 246, 255), outline=(213, 228, 255), width=1)
@@ -178,7 +185,7 @@ def frame_image(target_status, frame):
 
 def save_gif(status):
     frames = [frame_image(status, i) for i in range(FRAMES)]
-    out_file = OUT_DIR / f"order-status-{status}.gif"
+    out_file = OUT_DIR / FILE_NAMES[status]
     frames[0].save(
         out_file,
         save_all=True,

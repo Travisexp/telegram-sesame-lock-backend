@@ -1,28 +1,32 @@
 export const STATUSES = {
-  pending: {
-    label: 'Item Pending',
-    file: 'order-status-pending.gif'
-  },
-  approval: {
+  pending_approval: {
     label: 'Pending Approval',
-    file: 'order-status-approval.gif'
+    file: 'stock-status-pending-approval.gif'
   },
-  merchant: {
-    label: 'Order Sent to Merchant',
-    file: 'order-status-merchant.gif'
+  approved: {
+    label: 'Approved',
+    file: 'stock-status-approved.gif'
+  },
+  merchant_received: {
+    label: 'Merchant Received',
+    file: 'stock-status-merchant-received.gif'
   },
   delivery: {
     label: 'Delivery',
-    file: 'order-status-delivery.gif'
+    file: 'stock-status-delivery.gif'
   }
 };
 
 export function normalizeStatus(value = '') {
   const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, '');
 
-  if (['pending', 'itempending', 'item'].includes(normalized)) return 'pending';
-  if (['approval', 'pendingapproval', 'approve'].includes(normalized)) return 'approval';
-  if (['merchant', 'senttomerchant', 'ordersenttomerchant', 'sent'].includes(normalized)) return 'merchant';
+  if (['pending', 'pendingapproval', 'waitingapproval', 'waitapproval', 'staffwaiting'].includes(normalized)) {
+    return 'pending_approval';
+  }
+  if (['approved', 'approve'].includes(normalized)) return 'approved';
+  if (['merchant', 'merchantreceived', 'merchantreceive', 'received', 'supplierreceived'].includes(normalized)) {
+    return 'merchant_received';
+  }
   if (['delivery', 'delivering', 'delivered'].includes(normalized)) return 'delivery';
 
   return '';

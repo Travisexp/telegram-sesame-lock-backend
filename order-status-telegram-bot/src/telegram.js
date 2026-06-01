@@ -40,8 +40,8 @@ export async function setBotCommands() {
       { command: 'start', description: 'Show help' },
       { command: 'help', description: 'Show help' },
       { command: 'preview', description: 'Preview a status animation' },
-      { command: 'setstatus', description: 'Set order status' },
-      { command: 'order', description: 'Show order status' }
+      { command: 'setstatus', description: 'Set item status' },
+      { command: 'item', description: 'Show item status' }
     ]
   });
 }

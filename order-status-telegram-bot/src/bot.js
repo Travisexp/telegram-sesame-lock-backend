@@ -16,18 +16,18 @@ function isAllowedChat(chatId) {
 
 function helpText() {
   return [
-    'Order status bot ready.',
+    'Stock status bot ready.',
     '',
     'Commands:',
-    '/preview pending',
-    '/preview approval',
-    '/preview merchant',
+    '/preview pending_approval',
+    '/preview approved',
+    '/preview merchant_received',
     '/preview delivery',
-    '/setstatus ORDER_ID pending',
-    '/setstatus ORDER_ID approval',
-    '/setstatus ORDER_ID merchant',
-    '/setstatus ORDER_ID delivery',
-    '/order ORDER_ID'
+    '/setstatus ITEM_ID pending_approval',
+    '/setstatus ITEM_ID approved',
+    '/setstatus ITEM_ID merchant_received',
+    '/setstatus ITEM_ID delivery',
+    '/item ITEM_ID'
   ].join('\n');
 }
 
@@ -51,7 +51,7 @@ export async function sendStatusAnimation(chatId, status, orderId = '') {
 
   const animationUrl = `${getPublicBaseUrl()}/animations/${statusMeta.file}`;
   const caption = orderId
-    ? `Order ${orderId}: ${statusMeta.label}`
+    ? `Item ${orderId}: ${statusMeta.label}`
     : statusMeta.label;
 
   await sendAnimation(chatId, animationUrl, caption);
@@ -107,16 +107,17 @@ export async function handleUpdate(update) {
         break;
       }
 
+      case '/item':
       case '/order': {
         const orderId = args[0];
         if (!orderId) {
-          await sendMessage(chatId, 'Usage: /order ORDER_ID');
+          await sendMessage(chatId, 'Usage: /item ITEM_ID');
           break;
         }
 
         const order = getOrder(orderId);
         if (!order) {
-          await sendMessage(chatId, `No status found for order ${orderId}.`);
+          await sendMessage(chatId, `No status found for item ${orderId}.`);
           break;
         }
 

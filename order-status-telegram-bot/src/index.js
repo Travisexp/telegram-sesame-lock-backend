@@ -18,7 +18,7 @@ app.use('/animations', express.static(path.join(publicDir, 'animations')));
 app.get('/', (_req, res) => {
   res.json({
     ok: true,
-    service: 'order-status-telegram-bot',
+    service: 'stock-status-telegram-bot',
     mode: config.botMode,
     time: new Date().toISOString()
   });

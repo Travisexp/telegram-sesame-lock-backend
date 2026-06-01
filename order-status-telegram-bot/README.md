@@ -1,18 +1,18 @@
-# Order Status Telegram Bot
+# Stock Status Telegram Bot
 
-Telegram bot that sends an animated GIF based on an order status.
+Telegram bot that sends an animated GIF based on an item or stock request status.
 
 Flow:
 
 ```text
-Order status -> Node.js backend -> Telegram bot -> animated status GIF
+Item status -> Node.js backend -> Telegram bot -> animated status GIF
 ```
 
 Statuses:
 
-- `pending` - Item Pending
-- `approval` - Pending Approval
-- `merchant` - Order Sent to Merchant
+- `pending_approval` - Pending Approval
+- `approved` - Approved
+- `merchant_received` - Merchant Received
 - `delivery` - Delivery
 
 ## Commands
@@ -20,36 +20,36 @@ Statuses:
 ```text
 /start
 /help
-/preview pending
-/preview approval
-/preview merchant
+/preview pending_approval
+/preview approved
+/preview merchant_received
 /preview delivery
-/setstatus ORDER_ID pending
-/setstatus ORDER_ID approval
-/setstatus ORDER_ID merchant
-/setstatus ORDER_ID delivery
-/order ORDER_ID
+/setstatus ITEM_ID pending_approval
+/setstatus ITEM_ID approved
+/setstatus ITEM_ID merchant_received
+/setstatus ITEM_ID delivery
+/item ITEM_ID
 ```
 
 Examples:
 
 ```text
-/preview merchant
-/setstatus 1001 approval
-/order 1001
+/preview merchant_received
+/setstatus CHICKEN-10KG pending_approval
+/item CHICKEN-10KG
 ```
 
 ## External Order Webhook
 
-Your ordering system can update an order by calling:
+Your stock/order system can update an item by calling:
 
 ```http
-POST /orders/:orderId/status
+POST /orders/:itemId/status
 X-API-Key: your_ORDER_WEBHOOK_API_KEY
 Content-Type: application/json
 
 {
-  "status": "merchant",
+  "status": "merchant_received",
   "chatId": "123456789"
 }
 ```
