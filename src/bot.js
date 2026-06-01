@@ -14,6 +14,10 @@ function extractCommand(text = '') {
   return { command, args };
 }
 
+function normalizeText(text = '') {
+  return text.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 function isAllowedChat(chatId) {
   const allowedChatIds = new Set([
     String(config.telegram.allowedChatId),
@@ -54,6 +58,11 @@ async function replyStatus(chatId, prefix = 'Current status:') {
   await sendMessage(chatId, `${prefix}\n${formatStatus(status)}`);
 }
 
+async function sendOrderPreview(chatId) {
+  const animationUrl = `${getPublicBaseUrl()}/animations/order-status-demo.gif`;
+  await sendAnimation(chatId, animationUrl, 'Order status preview');
+}
+
 async function runSesameCommand(chatId, command, successVerb) {
   const accepted = await sendCommand(command);
   const taskId = accepted.task_id;
@@ -88,6 +97,7 @@ export async function handleUpdate(update) {
   }
 
   const { command, args } = extractCommand(text);
+  const normalizedText = normalizeText(text);
 
   if (!isAllowedChat(chatId)) {
     warn('telegram.unauthorized_chat', {
@@ -106,6 +116,7 @@ export async function handleUpdate(update) {
   try {
     switch (command) {
       case '/start':
+      case '/help':
         await sendMessage(chatId, helpText());
         break;
       case '/status':
@@ -131,12 +142,15 @@ export async function handleUpdate(update) {
         await runSesameCommand(chatId, 'sync', 'Sync');
         break;
       case '/order_preview':
-      case '/preview': {
-        const animationUrl = `${getPublicBaseUrl()}/animations/order-status-demo.gif`;
-        await sendAnimation(chatId, animationUrl, 'Order status preview');
+      case '/preview':
+        await sendOrderPreview(chatId);
         break;
-      }
       default:
+        if (['preview', 'order preview', 'show preview', 'animation', 'show animation'].includes(normalizedText)) {
+          await sendOrderPreview(chatId);
+          break;
+        }
+
         await sendMessage(chatId, `Unknown command.\n\n${helpText()}`);
     }
   } catch (err) {

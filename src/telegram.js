@@ -38,6 +38,7 @@ export async function setBotCommands() {
   return telegramRequest('setMyCommands', {
     commands: [
       { command: 'start', description: 'Show bot commands' },
+      { command: 'help', description: 'Show bot commands' },
       { command: 'status', description: 'Show lock status' },
       { command: 'battery', description: 'Show battery level' },
       { command: 'lock', description: 'Lock Sesame' },
