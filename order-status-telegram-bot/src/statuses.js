@@ -14,6 +14,10 @@ export const STATUSES = {
   delivery: {
     label: 'Delivery',
     file: 'stock-status-delivery.gif'
+  },
+  rejected: {
+    label: 'Rejected',
+    file: 'stock-status-pending-approval.gif'
   }
 };
 
@@ -28,6 +32,7 @@ export function normalizeStatus(value = '') {
     return 'merchant_received';
   }
   if (['delivery', 'delivering', 'delivered'].includes(normalized)) return 'delivery';
+  if (['rejected', 'reject', 'cancelled', 'canceled'].includes(normalized)) return 'rejected';
 
   return '';
 }

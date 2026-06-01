@@ -1,8 +1,10 @@
 import { config } from './config.js';
 import { info, warn, error } from './logger.js';
-import { getOrder, setOrderStatus } from './store.js';
+import { createOrderRequest, getOrder, setOrderStatus } from './store.js';
 import { normalizeStatus, statusChoices, STATUSES } from './statuses.js';
 import { sendAnimation, sendMessage } from './telegram.js';
+
+const staffChatIds = new Set(config.telegram.staffChatIds.map(String));
 
 function extractCommand(text = '') {
   const [rawCommand = '', ...args] = text.trim().split(/\s+/);
@@ -11,14 +13,42 @@ function extractCommand(text = '') {
 }
 
 function isAllowedChat(chatId) {
-  return String(chatId) === String(config.telegram.allowedChatId);
+  return isOwnerChat(chatId) || isStaffChat(chatId);
 }
 
-function helpText() {
-  return [
+function isOwnerChat(chatId) {
+  return String(chatId) === String(config.telegram.ownerChatId);
+}
+
+function isStaffChat(chatId) {
+  return staffChatIds.has(String(chatId));
+}
+
+function requesterName(message) {
+  const user = message.from;
+  return [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'Staff';
+}
+
+function helpText(chatId) {
+  const sharedCommands = [
     'Stock status bot ready.',
     '',
-    'Commands:',
+    'Staff:',
+    '/request ITEM_NAME',
+    '/item ITEM_ID'
+  ];
+
+  if (!isOwnerChat(chatId)) {
+    return sharedCommands.join('\n');
+  }
+
+  return [
+    ...sharedCommands,
+    '',
+    'Owner:',
+    '/addstaff CHAT_ID',
+    '/approve ITEM_ID',
+    '/reject ITEM_ID',
     '/preview pending_approval',
     '/preview approved',
     '/preview merchant_received',
@@ -50,11 +80,22 @@ export async function sendStatusAnimation(chatId, status, orderId = '') {
   }
 
   const animationUrl = `${getPublicBaseUrl()}/animations/${statusMeta.file}`;
-  const caption = orderId
-    ? `Item ${orderId}: ${statusMeta.label}`
-    : statusMeta.label;
+  const order = orderId ? getOrder(orderId) : null;
+  const caption = order
+    ? `Item ${orderId}: ${order.itemName || 'Stock item'}\nStatus: ${statusMeta.label}`
+    : orderId
+      ? `Item ${orderId}: ${statusMeta.label}`
+      : statusMeta.label;
 
   await sendAnimation(chatId, animationUrl, caption);
+}
+
+async function notifyOrderStatus(order, status) {
+  await sendStatusAnimation(config.telegram.ownerChatId, status, order.orderId);
+
+  if (order.requesterChatId && String(order.requesterChatId) !== String(config.telegram.ownerChatId)) {
+    await sendStatusAnimation(order.requesterChatId, status, order.orderId);
+  }
 }
 
 export async function handleUpdate(update) {
@@ -68,6 +109,11 @@ export async function handleUpdate(update) {
 
   const { command, args } = extractCommand(text);
 
+  if (command === '/myid') {
+    await sendMessage(chatId, `Your Telegram chat ID is:\n${chatId}`);
+    return;
+  }
+
   if (!isAllowedChat(chatId)) {
     warn('telegram.unauthorized_chat', { chatId, command });
     await sendMessage(chatId, 'Unauthorized.');
@@ -80,8 +126,94 @@ export async function handleUpdate(update) {
     switch (command) {
       case '/start':
       case '/help':
-        await sendMessage(chatId, helpText());
+        await sendMessage(chatId, helpText(chatId));
         break;
+
+      case '/addstaff': {
+        if (!isOwnerChat(chatId)) {
+          await sendMessage(chatId, 'Only the owner can add staff.');
+          break;
+        }
+
+        const staffChatId = args[0];
+        if (!staffChatId) {
+          await sendMessage(chatId, 'Usage: /addstaff CHAT_ID');
+          break;
+        }
+
+        staffChatIds.add(String(staffChatId));
+        await sendMessage(chatId, `Staff added for this running session: ${staffChatId}`);
+        await sendMessage(staffChatId, 'You can now request stock approval with /request ITEM_NAME.').catch(() => {});
+        break;
+      }
+
+      case '/request': {
+        const itemName = args.join(' ').trim();
+        if (!itemName) {
+          await sendMessage(chatId, 'Usage: /request ITEM_NAME');
+          break;
+        }
+
+        const order = createOrderRequest({
+          itemName,
+          requesterChatId: chatId,
+          requesterName: requesterName(message)
+        });
+
+        await sendMessage(chatId, `Request sent for approval.\nItem ${order.orderId}: ${order.itemName}`);
+        await sendMessage(
+          config.telegram.ownerChatId,
+          [
+            'New stock request',
+            `Item ${order.orderId}: ${order.itemName}`,
+            `From: ${order.requesterName}`,
+            '',
+            `Approve: /approve ${order.orderId}`,
+            `Reject: /reject ${order.orderId}`
+          ].join('\n')
+        );
+        await sendStatusAnimation(config.telegram.ownerChatId, 'pending_approval', order.orderId);
+        break;
+      }
+
+      case '/approve': {
+        if (!isOwnerChat(chatId)) {
+          await sendMessage(chatId, 'Only the owner can approve stock requests.');
+          break;
+        }
+
+        const orderId = args[0];
+        const order = getOrder(orderId);
+        if (!order) {
+          await sendMessage(chatId, `No status found for item ${orderId}.`);
+          break;
+        }
+
+        const updated = setOrderStatus(orderId, 'approved', { approvedBy: String(chatId) });
+        await notifyOrderStatus(updated, 'approved');
+        break;
+      }
+
+      case '/reject': {
+        if (!isOwnerChat(chatId)) {
+          await sendMessage(chatId, 'Only the owner can reject stock requests.');
+          break;
+        }
+
+        const orderId = args[0];
+        const order = getOrder(orderId);
+        if (!order) {
+          await sendMessage(chatId, `No status found for item ${orderId}.`);
+          break;
+        }
+
+        const updated = setOrderStatus(orderId, 'rejected', { rejectedBy: String(chatId) });
+        await sendMessage(config.telegram.ownerChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
+        if (updated.requesterChatId && String(updated.requesterChatId) !== String(config.telegram.ownerChatId)) {
+          await sendMessage(updated.requesterChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
+        }
+        break;
+      }
 
       case '/preview': {
         const status = normalizeStatus(args[0] || 'pending');
@@ -94,6 +226,11 @@ export async function handleUpdate(update) {
       }
 
       case '/setstatus': {
+        if (!isOwnerChat(chatId)) {
+          await sendMessage(chatId, 'Only the owner can set item status.');
+          break;
+        }
+
         const orderId = args[0];
         const status = normalizeStatus(args[1] || '');
 
@@ -102,8 +239,8 @@ export async function handleUpdate(update) {
           break;
         }
 
-        setOrderStatus(orderId, status);
-        await sendStatusAnimation(chatId, status, orderId);
+        const updated = setOrderStatus(orderId, status);
+        await notifyOrderStatus(updated, status);
         break;
       }
 
@@ -126,7 +263,7 @@ export async function handleUpdate(update) {
       }
 
       default:
-        await sendMessage(chatId, `Unknown command.\n\n${helpText()}`);
+        await sendMessage(chatId, `Unknown command.\n\n${helpText(chatId)}`);
     }
   } catch (err) {
     error('command.failed', { chatId, command, message: err.message });

@@ -21,6 +21,13 @@ function readIntEnv(name, defaultValue) {
   return parsed;
 }
 
+function readListEnv(name) {
+  return readEnv(name)
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 const botMode = readEnv('BOT_MODE', { defaultValue: 'polling' }).toLowerCase();
 
 export const config = {
@@ -32,6 +39,10 @@ export const config = {
   telegram: {
     botToken: readEnv('TELEGRAM_BOT_TOKEN', { required: true }),
     allowedChatId: readEnv('TELEGRAM_ALLOWED_CHAT_ID', { required: true }),
+    ownerChatId: readEnv('TELEGRAM_OWNER_CHAT_ID', {
+      defaultValue: readEnv('TELEGRAM_ALLOWED_CHAT_ID', { required: true })
+    }),
+    staffChatIds: readListEnv('TELEGRAM_STAFF_CHAT_IDS'),
     webhookUrl: readEnv('WEBHOOK_URL'),
     webhookSecret: readEnv('TELEGRAM_WEBHOOK_SECRET'),
     clearWebhookOnPoll: readEnv('TELEGRAM_CLEAR_WEBHOOK_ON_POLL', {

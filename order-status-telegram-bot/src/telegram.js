@@ -39,6 +39,11 @@ export async function setBotCommands() {
     commands: [
       { command: 'start', description: 'Show help' },
       { command: 'help', description: 'Show help' },
+      { command: 'myid', description: 'Show your Telegram chat ID' },
+      { command: 'request', description: 'Request stock approval' },
+      { command: 'addstaff', description: 'Add staff chat ID' },
+      { command: 'approve', description: 'Approve item request' },
+      { command: 'reject', description: 'Reject item request' },
       { command: 'preview', description: 'Preview a status animation' },
       { command: 'setstatus', description: 'Set item status' },
       { command: 'item', description: 'Show item status' }
