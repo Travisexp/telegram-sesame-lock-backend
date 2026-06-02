@@ -228,11 +228,12 @@ async function submitCart(message) {
       reply_markup: approvalKeyboard(order.orderId)
     }
   );
-  await sendStatusAnimation(config.telegram.ownerChatId, 'pending_approval', order.orderId);
+  await sendStatusAnimation(chatId, 'pending_approval', order.orderId);
 }
 
 async function notifyOrderStatus(order, status) {
-  await sendStatusAnimation(config.telegram.ownerChatId, status, order.orderId);
+  const statusLabel = STATUSES[status]?.label || status;
+  await sendMessage(config.telegram.ownerChatId, `Invoice ${order.orderId} status updated: ${statusLabel}`);
 
   if (order.requesterChatId && String(order.requesterChatId) !== String(config.telegram.ownerChatId)) {
     await sendStatusAnimation(order.requesterChatId, status, order.orderId);
@@ -473,7 +474,7 @@ export async function handleUpdate(update) {
             reply_markup: approvalKeyboard(order.orderId)
           }
         );
-        await sendStatusAnimation(config.telegram.ownerChatId, 'pending_approval', order.orderId);
+        await sendStatusAnimation(chatId, 'pending_approval', order.orderId);
         break;
       }
 
