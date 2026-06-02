@@ -21,10 +21,13 @@ Statuses:
 /start
 /help
 /myid
+/items
+/cart
+/submit
 /request ITEM_NAME
 /addstaff CHAT_ID
-/approve ITEM_ID
-/reject ITEM_ID
+/approve INVOICE_ID
+/reject INVOICE_ID
 /preview pending_approval
 /preview approved
 /preview merchant_received
@@ -40,6 +43,9 @@ Examples:
 
 ```text
 /preview merchant_received
+/items
+/cart
+/submit
 /request Chicken Breast 10kg
 /approve 1001
 /setstatus CHICKEN-10KG pending_approval
@@ -55,7 +61,9 @@ TELEGRAM_OWNER_CHAT_ID=your_chat_id
 TELEGRAM_STAFF_CHAT_IDS=staff_chat_id_1,staff_chat_id_2
 ```
 
-Staff can use `/request ITEM_NAME`. The owner receives the pending approval animation and can reply with `/approve ITEM_ID` or `/reject ITEM_ID`.
+Staff can use `/items` to choose stock, pick a quantity, review `/cart`, and send `/submit`. The owner receives the pending approval animation and can reply with `/approve INVOICE_ID` or `/reject INVOICE_ID`.
+
+The cart and approval request include every invoice line as `quantity x item name`.
 
 If a staff member does not know their chat ID, they can send `/myid` to the bot and give that number to the owner.
 

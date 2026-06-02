@@ -55,17 +55,17 @@ function helpText(chatId) {
     '',
     'Owner:',
     '/addstaff CHAT_ID',
-    '/approve ITEM_ID',
-    '/reject ITEM_ID',
+    '/approve INVOICE_ID',
+    '/reject INVOICE_ID',
     '/preview pending_approval',
     '/preview approved',
     '/preview merchant_received',
     '/preview delivery',
-    '/setstatus ITEM_ID pending_approval',
-    '/setstatus ITEM_ID approved',
-    '/setstatus ITEM_ID merchant_received',
-    '/setstatus ITEM_ID delivery',
-    '/item ITEM_ID'
+    '/setstatus INVOICE_ID pending_approval',
+    '/setstatus INVOICE_ID approved',
+    '/setstatus INVOICE_ID merchant_received',
+    '/setstatus INVOICE_ID delivery',
+    '/item INVOICE_ID'
   ].join('\n');
 }
 
@@ -90,9 +90,9 @@ export async function sendStatusAnimation(chatId, status, orderId = '') {
   const animationUrl = `${getPublicBaseUrl()}/animations/${statusMeta.file}`;
   const order = orderId ? getOrder(orderId) : null;
   const caption = order
-    ? `Item ${orderId}: ${order.itemName || 'Stock item'}\nStatus: ${statusMeta.label}`
+    ? `Invoice ${orderId}:\n${order.itemName || 'Stock item'}\nStatus: ${statusMeta.label}`
     : orderId
-      ? `Item ${orderId}: ${statusMeta.label}`
+      ? `Invoice ${orderId}: ${statusMeta.label}`
       : statusMeta.label;
 
   await sendAnimation(chatId, animationUrl, caption);
@@ -115,9 +115,23 @@ function itemsKeyboard(category) {
     inline_keyboard: getCategoryItems(category).map((item, index) => ([
       {
         text: item,
-        callback_data: `add:${category}:${index}`
+        callback_data: `pick:${category}:${index}`
       }
     ]))
+  };
+}
+
+function quantityKeyboard(category, index) {
+  return {
+    inline_keyboard: [
+      [1, 2, 3, 4, 5, 10, 20].map((quantity) => ({
+        text: String(quantity),
+        callback_data: `qty:${category}:${index}:${quantity}`
+      })),
+      [
+        { text: 'Back to items', callback_data: `cat:${category}` }
+      ]
+    ]
   };
 }
 
@@ -130,6 +144,10 @@ function approvalKeyboard(orderId) {
       ]
     ]
   };
+}
+
+function formatInvoiceLines(items) {
+  return items.map((item, index) => `${index + 1}. ${item.quantity} x ${item.name}`);
 }
 
 async function sendItemsMenu(chatId, text = 'Hi Crew, what would you like to order today?') {
@@ -149,7 +167,7 @@ async function sendCart(chatId) {
     chatId,
     [
       'Cart:',
-      ...cart.map((item, index) => `${index + 1}. ${item}`),
+      ...formatInvoiceLines(cart),
       '',
       'Send /submit to request approval.'
     ].join('\n')
@@ -165,19 +183,26 @@ async function submitCart(message) {
   }
 
   const order = createOrderRequest({
-    itemName: cart.join(', '),
+    items: cart,
     requesterChatId: chatId,
     requesterName: requesterName(message)
   });
   clearCart(chatId);
 
-  await sendMessage(chatId, `Request sent for approval.\nItem ${order.orderId}:\n${order.itemName}`);
+  await sendMessage(
+    chatId,
+    [
+      'Request sent for approval.',
+      `Invoice ${order.orderId}:`,
+      ...formatInvoiceLines(order.items)
+    ].join('\n')
+  );
   await sendMessage(
     config.telegram.ownerChatId,
     [
       'New stock request',
-      `Item ${order.orderId}:`,
-      order.itemName,
+      `Invoice ${order.orderId}:`,
+      ...formatInvoiceLines(order.items),
       `From: ${order.requesterName}`,
       '',
       'Tap a button below, or type:',
@@ -206,13 +231,13 @@ async function approveOrder(chatId, orderId) {
   }
 
   if (!orderId) {
-    await sendMessage(chatId, 'Usage: approve ITEM_ID');
+    await sendMessage(chatId, 'Usage: approve INVOICE_ID');
     return;
   }
 
   const order = getOrder(orderId);
   if (!order) {
-    await sendMessage(chatId, `No status found for item ${orderId}.`);
+    await sendMessage(chatId, `No status found for invoice ${orderId}.`);
     return;
   }
 
@@ -227,20 +252,20 @@ async function rejectOrder(chatId, orderId) {
   }
 
   if (!orderId) {
-    await sendMessage(chatId, 'Usage: reject ITEM_ID');
+    await sendMessage(chatId, 'Usage: reject INVOICE_ID');
     return;
   }
 
   const order = getOrder(orderId);
   if (!order) {
-    await sendMessage(chatId, `No status found for item ${orderId}.`);
+    await sendMessage(chatId, `No status found for invoice ${orderId}.`);
     return;
   }
 
   const updated = setOrderStatus(orderId, 'rejected', { rejectedBy: String(chatId) });
-  await sendMessage(config.telegram.ownerChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
+  await sendMessage(config.telegram.ownerChatId, `Invoice ${updated.orderId} rejected:\n${updated.itemName || 'Stock item'}`);
   if (updated.requesterChatId && String(updated.requesterChatId) !== String(config.telegram.ownerChatId)) {
-    await sendMessage(updated.requesterChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
+    await sendMessage(updated.requesterChatId, `Invoice ${updated.orderId} rejected:\n${updated.itemName || 'Stock item'}`);
   }
 }
 
@@ -268,7 +293,7 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
-  if (data.startsWith('add:')) {
+  if (data.startsWith('pick:') || data.startsWith('add:')) {
     const [, category, index] = data.split(':');
     const itemName = getCatalogItem(category, index);
     if (!itemName) {
@@ -276,9 +301,24 @@ async function handleCallbackQuery(callbackQuery) {
       return;
     }
 
-    addCartItem(chatId, itemName);
-    await answerCallbackQuery(callbackId, 'Added to cart.');
-    await sendMessage(chatId, `Added to cart:\n${itemName}`);
+    await answerCallbackQuery(callbackId);
+    await sendMessage(chatId, `Choose quantity for:\n${itemName}`, {
+      reply_markup: quantityKeyboard(category, index)
+    });
+    return;
+  }
+
+  if (data.startsWith('qty:')) {
+    const [, category, index, quantity] = data.split(':');
+    const itemName = getCatalogItem(category, index);
+    if (!itemName) {
+      await answerCallbackQuery(callbackId, 'Item not found.');
+      return;
+    }
+
+    addCartItem(chatId, itemName, quantity);
+    await answerCallbackQuery(callbackId, `Added ${quantity}.`);
+    await sendMessage(chatId, `Added to cart:\n${quantity} x ${itemName}`);
     return;
   }
 
@@ -386,7 +426,8 @@ export async function handleUpdate(update) {
           config.telegram.ownerChatId,
           [
             'New stock request',
-            `Item ${order.orderId}: ${order.itemName}`,
+            `Invoice ${order.orderId}:`,
+            order.itemName,
             `From: ${order.requesterName}`,
             '',
             'Tap a button below, or type:',
