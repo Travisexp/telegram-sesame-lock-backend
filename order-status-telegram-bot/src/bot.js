@@ -146,6 +146,20 @@ function approvalKeyboard(orderId) {
   };
 }
 
+function cartActionKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Check Cart', callback_data: 'cart:show' },
+        { text: 'Checkout', callback_data: 'cart:submit' }
+      ],
+      [
+        { text: 'Add More Items', callback_data: 'items:menu' }
+      ]
+    ]
+  };
+}
+
 function formatInvoiceLines(items) {
   return items.map((item, index) => `${index + 1}. ${item.quantity} x ${item.name}`);
 }
@@ -167,10 +181,11 @@ async function sendCart(chatId) {
     chatId,
     [
       'Cart:',
-      ...formatInvoiceLines(cart),
-      '',
-      'Send /submit to request approval.'
-    ].join('\n')
+      ...formatInvoiceLines(cart)
+    ].join('\n'),
+    {
+      reply_markup: cartActionKeyboard()
+    }
   );
 }
 
@@ -318,7 +333,27 @@ async function handleCallbackQuery(callbackQuery) {
 
     addCartItem(chatId, itemName, quantity);
     await answerCallbackQuery(callbackId, `Added ${quantity}.`);
-    await sendMessage(chatId, `Added to cart:\n${quantity} x ${itemName}`);
+    await sendMessage(chatId, `Added to cart:\n${quantity} x ${itemName}`, {
+      reply_markup: cartActionKeyboard()
+    });
+    return;
+  }
+
+  if (data === 'cart:show') {
+    await answerCallbackQuery(callbackId);
+    await sendCart(chatId);
+    return;
+  }
+
+  if (data === 'cart:submit') {
+    await answerCallbackQuery(callbackId);
+    await submitCart(callbackQuery.message);
+    return;
+  }
+
+  if (data === 'items:menu') {
+    await answerCallbackQuery(callbackId);
+    await sendItemsMenu(chatId);
     return;
   }
 
