@@ -132,8 +132,8 @@ function approvalKeyboard(orderId) {
   };
 }
 
-async function sendItemsMenu(chatId) {
-  await sendMessage(chatId, 'Choose a Woolworths category:', {
+async function sendItemsMenu(chatId, text = 'Hi Crew, what would you like to order today?') {
+  await sendMessage(chatId, text, {
     reply_markup: categoryKeyboard()
   });
 }
@@ -330,6 +330,11 @@ export async function handleUpdate(update) {
     switch (command) {
       case '/start':
       case '/help':
+        if (!isOwnerChat(chatId)) {
+          await sendItemsMenu(chatId);
+          break;
+        }
+
         await sendMessage(chatId, helpText(chatId));
         break;
 
@@ -468,6 +473,11 @@ export async function handleUpdate(update) {
 
         if (plainText === 'submit') {
           await submitCart(message);
+          break;
+        }
+
+        if (!isOwnerChat(chatId)) {
+          await sendItemsMenu(chatId);
           break;
         }
 
