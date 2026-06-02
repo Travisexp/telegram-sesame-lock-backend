@@ -121,6 +121,17 @@ function itemsKeyboard(category) {
   };
 }
 
+function approvalKeyboard(orderId) {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Approve', callback_data: `approve:${orderId}` },
+        { text: 'Reject', callback_data: `reject:${orderId}` }
+      ]
+    ]
+  };
+}
+
 async function sendItemsMenu(chatId) {
   await sendMessage(chatId, 'Choose a Woolworths category:', {
     reply_markup: categoryKeyboard()
@@ -169,9 +180,13 @@ async function submitCart(message) {
       order.itemName,
       `From: ${order.requesterName}`,
       '',
-      `Approve: /approve ${order.orderId}`,
-      `Reject: /reject ${order.orderId}`
-    ].join('\n')
+      'Tap a button below, or type:',
+      `approve ${order.orderId}`,
+      `reject ${order.orderId}`
+    ].join('\n'),
+    {
+      reply_markup: approvalKeyboard(order.orderId)
+    }
   );
   await sendStatusAnimation(config.telegram.ownerChatId, 'pending_approval', order.orderId);
 }
@@ -181,6 +196,51 @@ async function notifyOrderStatus(order, status) {
 
   if (order.requesterChatId && String(order.requesterChatId) !== String(config.telegram.ownerChatId)) {
     await sendStatusAnimation(order.requesterChatId, status, order.orderId);
+  }
+}
+
+async function approveOrder(chatId, orderId) {
+  if (!isOwnerChat(chatId)) {
+    await sendMessage(chatId, 'Only the owner can approve stock requests.');
+    return;
+  }
+
+  if (!orderId) {
+    await sendMessage(chatId, 'Usage: approve ITEM_ID');
+    return;
+  }
+
+  const order = getOrder(orderId);
+  if (!order) {
+    await sendMessage(chatId, `No status found for item ${orderId}.`);
+    return;
+  }
+
+  const updated = setOrderStatus(orderId, 'approved', { approvedBy: String(chatId) });
+  await notifyOrderStatus(updated, 'approved');
+}
+
+async function rejectOrder(chatId, orderId) {
+  if (!isOwnerChat(chatId)) {
+    await sendMessage(chatId, 'Only the owner can reject stock requests.');
+    return;
+  }
+
+  if (!orderId) {
+    await sendMessage(chatId, 'Usage: reject ITEM_ID');
+    return;
+  }
+
+  const order = getOrder(orderId);
+  if (!order) {
+    await sendMessage(chatId, `No status found for item ${orderId}.`);
+    return;
+  }
+
+  const updated = setOrderStatus(orderId, 'rejected', { rejectedBy: String(chatId) });
+  await sendMessage(config.telegram.ownerChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
+  if (updated.requesterChatId && String(updated.requesterChatId) !== String(config.telegram.ownerChatId)) {
+    await sendMessage(updated.requesterChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
   }
 }
 
@@ -219,6 +279,20 @@ async function handleCallbackQuery(callbackQuery) {
     addCartItem(chatId, itemName);
     await answerCallbackQuery(callbackId, 'Added to cart.');
     await sendMessage(chatId, `Added to cart:\n${itemName}`);
+    return;
+  }
+
+  if (data.startsWith('approve:')) {
+    const orderId = data.slice('approve:'.length);
+    await answerCallbackQuery(callbackId, 'Approved.');
+    await approveOrder(chatId, orderId);
+    return;
+  }
+
+  if (data.startsWith('reject:')) {
+    const orderId = data.slice('reject:'.length);
+    await answerCallbackQuery(callbackId, 'Rejected.');
+    await rejectOrder(chatId, orderId);
   }
 }
 
@@ -310,50 +384,27 @@ export async function handleUpdate(update) {
             `Item ${order.orderId}: ${order.itemName}`,
             `From: ${order.requesterName}`,
             '',
-            `Approve: /approve ${order.orderId}`,
-            `Reject: /reject ${order.orderId}`
-          ].join('\n')
+            'Tap a button below, or type:',
+            `approve ${order.orderId}`,
+            `reject ${order.orderId}`
+          ].join('\n'),
+          {
+            reply_markup: approvalKeyboard(order.orderId)
+          }
         );
         await sendStatusAnimation(config.telegram.ownerChatId, 'pending_approval', order.orderId);
         break;
       }
 
-      case '/approve': {
-        if (!isOwnerChat(chatId)) {
-          await sendMessage(chatId, 'Only the owner can approve stock requests.');
-          break;
-        }
-
-        const orderId = args[0];
-        const order = getOrder(orderId);
-        if (!order) {
-          await sendMessage(chatId, `No status found for item ${orderId}.`);
-          break;
-        }
-
-        const updated = setOrderStatus(orderId, 'approved', { approvedBy: String(chatId) });
-        await notifyOrderStatus(updated, 'approved');
+      case '/approve':
+      case 'approve': {
+        await approveOrder(chatId, args[0]);
         break;
       }
 
-      case '/reject': {
-        if (!isOwnerChat(chatId)) {
-          await sendMessage(chatId, 'Only the owner can reject stock requests.');
-          break;
-        }
-
-        const orderId = args[0];
-        const order = getOrder(orderId);
-        if (!order) {
-          await sendMessage(chatId, `No status found for item ${orderId}.`);
-          break;
-        }
-
-        const updated = setOrderStatus(orderId, 'rejected', { rejectedBy: String(chatId) });
-        await sendMessage(config.telegram.ownerChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
-        if (updated.requesterChatId && String(updated.requesterChatId) !== String(config.telegram.ownerChatId)) {
-          await sendMessage(updated.requesterChatId, `Item ${updated.orderId} rejected: ${updated.itemName || 'Stock item'}`);
-        }
+      case '/reject':
+      case 'reject': {
+        await rejectOrder(chatId, args[0]);
         break;
       }
 
