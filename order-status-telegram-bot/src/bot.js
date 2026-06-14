@@ -5,7 +5,16 @@ import { addCartItem, clearCart, createOrderRequest, getCart, getOrder, setOrder
 import { normalizeStatus, statusChoices, STATUSES } from './statuses.js';
 import { answerCallbackQuery, sendAnimation, sendMessage } from './telegram.js';
 
-const staffChatIds = new Set(config.telegram.staffChatIds.map(String));
+const permanentStaffChatIds = [
+  '8822131914',
+  '8959349937',
+  '6355760940'
+];
+
+const staffChatIds = new Set([
+  ...permanentStaffChatIds,
+  ...config.telegram.staffChatIds.map(String)
+]);
 
 function extractCommand(text = '') {
   const [rawCommand = '', ...args] = text.trim().split(/\s+/);
