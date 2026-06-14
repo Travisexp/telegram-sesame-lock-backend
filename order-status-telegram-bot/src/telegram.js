@@ -51,7 +51,7 @@ export async function setBotCommands() {
       { command: 'items', description: 'Choose stock items' },
       { command: 'cart', description: 'Show cart' },
       { command: 'submit', description: 'Submit cart for approval' },
-      { command: 'request', description: 'Request stock approval' },
+      { command: 'request', description: 'Add custom item to cart' },
       { command: 'addstaff', description: 'Add staff chat ID' },
       { command: 'approve', description: 'Approve item request' },
       { command: 'reject', description: 'Reject item request' },

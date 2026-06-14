@@ -173,6 +173,26 @@ function formatInvoiceLines(items) {
   return items.map((item, index) => `${index + 1}. ${item.quantity} x ${item.name}`);
 }
 
+function orderSummary(order) {
+  if (order?.items?.length) {
+    return formatInvoiceLines(order.items).join('\n');
+  }
+
+  return order?.itemName || 'Stock item';
+}
+
+function parseCustomItemRequest(args) {
+  const parts = [...args];
+  const lastPart = parts[parts.length - 1];
+  const trailingQuantity = Number(lastPart);
+  const hasTrailingQuantity = Number.isInteger(trailingQuantity) && trailingQuantity > 0;
+  const quantity = hasTrailingQuantity ? trailingQuantity : 1;
+  const nameParts = hasTrailingQuantity ? parts.slice(0, -1) : parts;
+  const itemName = nameParts.join(' ').trim();
+
+  return { itemName, quantity };
+}
+
 async function sendItemsMenu(chatId, text = 'Hi Crew, what would you like to order today?') {
   await sendMessage(chatId, text, {
     reply_markup: categoryKeyboard()
@@ -245,7 +265,23 @@ async function notifyOrderStatus(order, status) {
   await sendMessage(config.telegram.ownerChatId, `Invoice ${order.orderId} status updated: ${statusLabel}`);
 
   if (order.requesterChatId && String(order.requesterChatId) !== String(config.telegram.ownerChatId)) {
-    await sendStatusAnimation(order.requesterChatId, status, order.orderId);
+    try {
+      await sendStatusAnimation(order.requesterChatId, status, order.orderId);
+    } catch (err) {
+      error('staff.status_animation_failed', {
+        chatId: order.requesterChatId,
+        orderId: order.orderId,
+        status,
+        message: err.message
+      });
+      await sendMessage(
+        order.requesterChatId,
+        [
+          `Invoice ${order.orderId} status updated: ${statusLabel}`,
+          orderSummary(order)
+        ].join('\n')
+      );
+    }
   }
 }
 
@@ -454,36 +490,16 @@ export async function handleUpdate(update) {
       }
 
       case '/request': {
-        const itemName = args.join(' ').trim();
+        const { itemName, quantity } = parseCustomItemRequest(args);
         if (!itemName) {
           await sendMessage(chatId, 'Usage: /request ITEM_NAME');
           break;
         }
 
-        const order = createOrderRequest({
-          itemName,
-          requesterChatId: chatId,
-          requesterName: requesterName(message)
+        addCartItem(chatId, itemName, quantity);
+        await sendMessage(chatId, `Added custom item to cart:\n${quantity} x ${itemName}`, {
+          reply_markup: cartActionKeyboard()
         });
-
-        await sendMessage(chatId, `Request sent for approval.\nItem ${order.orderId}: ${order.itemName}`);
-        await sendMessage(
-          config.telegram.ownerChatId,
-          [
-            'New stock request',
-            `Invoice ${order.orderId}:`,
-            order.itemName,
-            `From: ${order.requesterName}`,
-            '',
-            'Tap a button below, or type:',
-            `approve ${order.orderId}`,
-            `reject ${order.orderId}`
-          ].join('\n'),
-          {
-            reply_markup: approvalKeyboard(order.orderId)
-          }
-        );
-        await sendStatusAnimation(chatId, 'pending_approval', order.orderId);
         break;
       }
 
