@@ -296,6 +296,14 @@ function parseApprovalMessage(text = '') {
   };
 }
 
+function restoreOrder(order) {
+  if (!order?.orderId) {
+    return null;
+  }
+
+  return setOrderStatus(order.orderId, order.status || 'pending_approval', order);
+}
+
 async function sendItemsMenu(chatId, text = 'Hi Crew, what would you like to order today?') {
   await sendMessage(chatId, text, {
     reply_markup: categoryKeyboard()
@@ -432,7 +440,7 @@ async function notifyStockAvailability(chatId, orderId, outOfStockItems) {
   await sendMessage(chatId, `Stock availability update sent to staff for invoice ${orderId}.`);
 }
 
-async function sendOutOfStockPicker(chatId, orderId) {
+async function sendOutOfStockPicker(chatId, orderId, fallbackOrder = null) {
   if (!isOwnerChat(chatId)) {
     await sendMessage(chatId, 'Only the owner can send stock availability updates.');
     return;
@@ -441,7 +449,7 @@ async function sendOutOfStockPicker(chatId, orderId) {
   if (!orderId) {
     const recentOrders = listOrders(8).filter((order) => order.items?.length);
     if (!recentOrders.length) {
-      await sendMessage(chatId, 'No recent invoices found yet.');
+      await sendMessage(chatId, 'No recent invoices found yet. Reply to the original invoice message with /outofstock.');
       return;
     }
 
@@ -451,7 +459,7 @@ async function sendOutOfStockPicker(chatId, orderId) {
     return;
   }
 
-  const order = getOrder(orderId);
+  const order = getOrder(orderId) || restoreOrder(fallbackOrder);
   if (!order) {
     await sendMessage(chatId, `No status found for invoice ${orderId}.`);
     return;
@@ -625,7 +633,7 @@ async function handleCallbackQuery(callbackQuery) {
   if (data.startsWith('oos_menu:')) {
     const orderId = data.slice('oos_menu:'.length);
     await answerCallbackQuery(callbackId);
-    await sendOutOfStockPicker(chatId, orderId);
+    await sendOutOfStockPicker(chatId, orderId, parseApprovalMessage(callbackQuery.message?.text));
     return;
   }
 
@@ -788,7 +796,7 @@ export async function handleUpdate(update) {
         const orderId = args[0];
         const outOfStockItems = args.slice(1).join(' ').split(',').map((item) => item.trim()).filter(Boolean);
         if (!outOfStockItems.length) {
-          await sendOutOfStockPicker(chatId, orderId);
+          await sendOutOfStockPicker(chatId, orderId, parseApprovalMessage(message.reply_to_message?.text));
           break;
         }
         await notifyStockAvailability(chatId, orderId, outOfStockItems);
