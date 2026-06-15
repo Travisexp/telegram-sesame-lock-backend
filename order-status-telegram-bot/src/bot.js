@@ -193,6 +193,35 @@ function parseCustomItemRequest(args) {
   return { itemName, quantity };
 }
 
+function parseApprovalMessage(text = '') {
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+  const invoiceLine = lines.find((line) => /^Invoice\s+\S+:/i.test(line));
+  const orderId = invoiceLine?.match(/^Invoice\s+([^:]+):/i)?.[1];
+  const requesterChatId = lines.find((line) => /^Staff chat ID:/i.test(line))?.replace(/^Staff chat ID:\s*/i, '');
+  const requesterName = lines.find((line) => /^From:/i.test(line))?.replace(/^From:\s*/i, '') || 'Staff';
+  const items = lines
+    .map((line) => line.match(/^\d+\.\s+(\d+)\s+x\s+(.+)$/i))
+    .filter(Boolean)
+    .map((match) => ({
+      quantity: Number(match[1]) || 1,
+      name: match[2]
+    }));
+
+  if (!orderId || !requesterChatId) {
+    return null;
+  }
+
+  return {
+    orderId,
+    itemName: items.length ? items.map((item) => `${item.quantity} x ${item.name}`).join('\n') : 'Stock item',
+    items,
+    requesterChatId,
+    requesterName,
+    status: 'pending_approval',
+    createdAt: new Date().toISOString()
+  };
+}
+
 async function sendItemsMenu(chatId, text = 'Hi Crew, what would you like to order today?') {
   await sendMessage(chatId, text, {
     reply_markup: categoryKeyboard()
@@ -248,6 +277,7 @@ async function submitCart(message) {
       `Invoice ${order.orderId}:`,
       ...formatInvoiceLines(order.items),
       `From: ${order.requesterName}`,
+      `Staff chat ID: ${chatId}`,
       '',
       'Tap a button below, or type:',
       `approve ${order.orderId}`,
@@ -285,7 +315,7 @@ async function notifyOrderStatus(order, status) {
   }
 }
 
-async function approveOrder(chatId, orderId) {
+async function approveOrder(chatId, orderId, fallbackOrder = null) {
   if (!isOwnerChat(chatId)) {
     await sendMessage(chatId, 'Only the owner can approve stock requests.');
     return;
@@ -296,17 +326,17 @@ async function approveOrder(chatId, orderId) {
     return;
   }
 
-  const order = getOrder(orderId);
+  const order = getOrder(orderId) || fallbackOrder;
   if (!order) {
     await sendMessage(chatId, `No status found for invoice ${orderId}.`);
     return;
   }
 
-  const updated = setOrderStatus(orderId, 'approved', { approvedBy: String(chatId) });
+  const updated = setOrderStatus(orderId, 'approved', { ...order, approvedBy: String(chatId) });
   await notifyOrderStatus(updated, 'approved');
 }
 
-async function rejectOrder(chatId, orderId) {
+async function rejectOrder(chatId, orderId, fallbackOrder = null) {
   if (!isOwnerChat(chatId)) {
     await sendMessage(chatId, 'Only the owner can reject stock requests.');
     return;
@@ -317,13 +347,13 @@ async function rejectOrder(chatId, orderId) {
     return;
   }
 
-  const order = getOrder(orderId);
+  const order = getOrder(orderId) || fallbackOrder;
   if (!order) {
     await sendMessage(chatId, `No status found for invoice ${orderId}.`);
     return;
   }
 
-  const updated = setOrderStatus(orderId, 'rejected', { rejectedBy: String(chatId) });
+  const updated = setOrderStatus(orderId, 'rejected', { ...order, rejectedBy: String(chatId) });
   await sendMessage(config.telegram.ownerChatId, `Invoice ${updated.orderId} rejected:\n${updated.itemName || 'Stock item'}`);
   if (updated.requesterChatId && String(updated.requesterChatId) !== String(config.telegram.ownerChatId)) {
     await sendMessage(updated.requesterChatId, `Invoice ${updated.orderId} rejected:\n${updated.itemName || 'Stock item'}`);
@@ -406,14 +436,14 @@ async function handleCallbackQuery(callbackQuery) {
   if (data.startsWith('approve:')) {
     const orderId = data.slice('approve:'.length);
     await answerCallbackQuery(callbackId, 'Approved.');
-    await approveOrder(chatId, orderId);
+    await approveOrder(chatId, orderId, parseApprovalMessage(callbackQuery.message?.text));
     return;
   }
 
   if (data.startsWith('reject:')) {
     const orderId = data.slice('reject:'.length);
     await answerCallbackQuery(callbackId, 'Rejected.');
-    await rejectOrder(chatId, orderId);
+    await rejectOrder(chatId, orderId, parseApprovalMessage(callbackQuery.message?.text));
   }
 }
 
