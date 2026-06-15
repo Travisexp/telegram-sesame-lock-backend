@@ -28,7 +28,7 @@ Statuses:
 /addstaff CHAT_ID
 /approve INVOICE_ID
 /reject INVOICE_ID
-/outofstock INVOICE_ID ITEM_NAMES
+/outofstock INVOICE_ID
 /available INVOICE_ID
 /preview pending_approval
 /preview approved
@@ -49,7 +49,9 @@ Examples:
 /cart
 /submit
 /request Chicken Breast 10kg
+/request 2 orange juice 7 matcha 5 chai powder 15 teadrop chocolate powder 42% 2 apple juice
 /approve 1001
+/outofstock 1001
 /outofstock 1001 Sprite, Coca-Cola Zero
 /available 1001
 /setstatus CHICKEN-10KG pending_approval
@@ -71,9 +73,17 @@ The cart and approval request include every invoice line as `quantity x item nam
 
 If a staff member does not know their chat ID, they can send `/myid` to the bot and give that number to the owner.
 
-After approval, the owner can tell staff which items are unavailable:
+Staff can add one custom item, or paste multiple quantity/item pairs in one message:
 
 ```text
+/request Sprite 24 pack
+/request 2 orange juice 7 matcha 5 chai powder
+```
+
+After approval, the owner can pick unavailable items with buttons:
+
+```text
+/outofstock 1001
 /outofstock 1001 Sprite, Coca-Cola Zero
 /available 1001
 ```

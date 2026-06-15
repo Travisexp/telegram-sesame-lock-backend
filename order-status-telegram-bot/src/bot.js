@@ -74,7 +74,7 @@ function helpText(chatId) {
     '/setstatus INVOICE_ID approved',
     '/setstatus INVOICE_ID merchant_received',
     '/setstatus INVOICE_ID delivery',
-    '/outofstock INVOICE_ID ITEM_NAMES',
+    '/outofstock INVOICE_ID',
     '/available INVOICE_ID',
     '/item INVOICE_ID'
   ].join('\n');
@@ -152,6 +152,10 @@ function approvalKeyboard(orderId) {
       [
         { text: 'Approve', callback_data: `approve:${orderId}` },
         { text: 'Reject', callback_data: `reject:${orderId}` }
+      ],
+      [
+        { text: 'Pick Out of Stock', callback_data: `oos_menu:${orderId}` },
+        { text: 'All Available', callback_data: `available:${orderId}` }
       ]
     ]
   };
@@ -175,6 +179,35 @@ function formatInvoiceLines(items) {
   return items.map((item, index) => `${index + 1}. ${item.quantity} x ${item.name}`);
 }
 
+function shortButtonText(text) {
+  return text.length > 42 ? `${text.slice(0, 39)}...` : text;
+}
+
+function stockAvailabilityKeyboard(order) {
+  const selected = new Set(order.outOfStockItems || []);
+  const itemRows = (order.items || []).map((item, index) => {
+    const itemText = `${item.quantity} x ${item.name}`;
+    const prefix = selected.has(item.name) ? 'Remove' : 'Out';
+    return [{
+      text: `${prefix}: ${shortButtonText(itemText)}`,
+      callback_data: `oos_toggle:${order.orderId}:${index}`
+    }];
+  });
+
+  return {
+    inline_keyboard: [
+      ...itemRows,
+      [
+        { text: 'Send Update', callback_data: `oos_send:${order.orderId}` },
+        { text: 'All Available', callback_data: `available:${order.orderId}` }
+      ],
+      [
+        { text: 'Clear Selection', callback_data: `oos_clear:${order.orderId}` }
+      ]
+    ]
+  };
+}
+
 function orderSummary(order) {
   if (order?.items?.length) {
     return formatInvoiceLines(order.items).join('\n');
@@ -183,16 +216,46 @@ function orderSummary(order) {
   return order?.itemName || 'Stock item';
 }
 
-function parseCustomItemRequest(args) {
+function parseCustomItemRequests(args) {
   const parts = [...args];
+  const items = [];
+  let index = 0;
+
+  while (index < parts.length) {
+    const quantity = Number(parts[index]);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      break;
+    }
+
+    index += 1;
+    const nameParts = [];
+    while (index < parts.length) {
+      const nextQuantity = Number(parts[index]);
+      if (Number.isInteger(nextQuantity) && nextQuantity > 0) {
+        break;
+      }
+      nameParts.push(parts[index]);
+      index += 1;
+    }
+
+    const name = nameParts.join(' ').trim();
+    if (name) {
+      items.push({ name, quantity });
+    }
+  }
+
+  if (items.length && index === parts.length) {
+    return items;
+  }
+
   const lastPart = parts[parts.length - 1];
   const trailingQuantity = Number(lastPart);
   const hasTrailingQuantity = Number.isInteger(trailingQuantity) && trailingQuantity > 0;
   const quantity = hasTrailingQuantity ? trailingQuantity : 1;
   const nameParts = hasTrailingQuantity ? parts.slice(0, -1) : parts;
-  const itemName = nameParts.join(' ').trim();
+  const name = nameParts.join(' ').trim();
 
-  return { itemName, quantity };
+  return name ? [{ name, quantity }] : [];
 }
 
 function parseApprovalMessage(text = '') {
@@ -360,6 +423,70 @@ async function notifyStockAvailability(chatId, orderId, outOfStockItems) {
   await sendMessage(chatId, `Stock availability update sent to staff for invoice ${orderId}.`);
 }
 
+async function sendOutOfStockPicker(chatId, orderId) {
+  if (!isOwnerChat(chatId)) {
+    await sendMessage(chatId, 'Only the owner can send stock availability updates.');
+    return;
+  }
+
+  if (!orderId) {
+    await sendMessage(chatId, 'Usage: /outofstock INVOICE_ID');
+    return;
+  }
+
+  const order = getOrder(orderId);
+  if (!order) {
+    await sendMessage(chatId, `No status found for invoice ${orderId}.`);
+    return;
+  }
+
+  if (!order.items?.length) {
+    await sendMessage(chatId, `Invoice ${orderId} has no item list to pick from.`);
+    return;
+  }
+
+  await sendMessage(
+    chatId,
+    [
+      `Pick out-of-stock items for invoice ${orderId}:`,
+      ...formatInvoiceLines(order.items)
+    ].join('\n'),
+    {
+      reply_markup: stockAvailabilityKeyboard(order)
+    }
+  );
+}
+
+async function toggleOutOfStockItem(chatId, orderId, itemIndex) {
+  if (!isOwnerChat(chatId)) {
+    await sendMessage(chatId, 'Only the owner can send stock availability updates.');
+    return;
+  }
+
+  const order = getOrder(orderId);
+  const item = order?.items?.[itemIndex];
+  if (!order || !item) {
+    await sendMessage(chatId, `No item found for invoice ${orderId}.`);
+    return;
+  }
+
+  const selected = new Set(order.outOfStockItems || []);
+  if (selected.has(item.name)) {
+    selected.delete(item.name);
+  } else {
+    selected.add(item.name);
+  }
+
+  const updated = setOrderStatus(orderId, order.status || 'approved', {
+    ...order,
+    outOfStockItems: Array.from(selected)
+  });
+
+  await sendMessage(chatId, `Updated out-of-stock selection for invoice ${orderId}.`, {
+    reply_markup: stockAvailabilityKeyboard(updated)
+  });
+}
+
 async function approveOrder(chatId, orderId, fallbackOrder = null) {
   if (!isOwnerChat(chatId)) {
     await sendMessage(chatId, 'Only the owner can approve stock requests.');
@@ -478,6 +605,46 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
+  if (data.startsWith('oos_menu:')) {
+    const orderId = data.slice('oos_menu:'.length);
+    await answerCallbackQuery(callbackId);
+    await sendOutOfStockPicker(chatId, orderId);
+    return;
+  }
+
+  if (data.startsWith('oos_toggle:')) {
+    const [, orderId, itemIndex] = data.split(':');
+    await answerCallbackQuery(callbackId, 'Updated.');
+    await toggleOutOfStockItem(chatId, orderId, Number(itemIndex));
+    return;
+  }
+
+  if (data.startsWith('oos_send:')) {
+    const orderId = data.slice('oos_send:'.length);
+    const order = getOrder(orderId);
+    await answerCallbackQuery(callbackId, 'Sending update.');
+    await notifyStockAvailability(chatId, orderId, order?.outOfStockItems || []);
+    return;
+  }
+
+  if (data.startsWith('oos_clear:')) {
+    const orderId = data.slice('oos_clear:'.length);
+    const order = getOrder(orderId);
+    if (order) {
+      setOrderStatus(orderId, order.status || 'approved', { ...order, outOfStockItems: [] });
+    }
+    await answerCallbackQuery(callbackId, 'Cleared.');
+    await sendOutOfStockPicker(chatId, orderId);
+    return;
+  }
+
+  if (data.startsWith('available:')) {
+    const orderId = data.slice('available:'.length);
+    await answerCallbackQuery(callbackId, 'Sending update.');
+    await notifyStockAvailability(chatId, orderId, []);
+    return;
+  }
+
   if (data.startsWith('approve:')) {
     const orderId = data.slice('approve:'.length);
     await answerCallbackQuery(callbackId, 'Approved.');
@@ -565,16 +732,25 @@ export async function handleUpdate(update) {
       }
 
       case '/request': {
-        const { itemName, quantity } = parseCustomItemRequest(args);
-        if (!itemName) {
+        const customItems = parseCustomItemRequests(args);
+        if (!customItems.length) {
           await sendMessage(chatId, 'Usage: /request ITEM_NAME');
           break;
         }
 
-        addCartItem(chatId, itemName, quantity);
-        await sendMessage(chatId, `Added custom item to cart:\n${quantity} x ${itemName}`, {
-          reply_markup: cartActionKeyboard()
-        });
+        for (const item of customItems) {
+          addCartItem(chatId, item.name, item.quantity);
+        }
+        await sendMessage(
+          chatId,
+          [
+            'Added custom item to cart:',
+            ...formatInvoiceLines(customItems)
+          ].join('\n'),
+          {
+            reply_markup: cartActionKeyboard()
+          }
+        );
         break;
       }
 
@@ -595,7 +771,7 @@ export async function handleUpdate(update) {
         const orderId = args[0];
         const outOfStockItems = args.slice(1).join(' ').split(',').map((item) => item.trim()).filter(Boolean);
         if (!outOfStockItems.length) {
-          await sendMessage(chatId, 'Usage: /outofstock INVOICE_ID ITEM_NAMES');
+          await sendOutOfStockPicker(chatId, orderId);
           break;
         }
         await notifyStockAvailability(chatId, orderId, outOfStockItems);
