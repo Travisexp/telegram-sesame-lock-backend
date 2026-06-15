@@ -91,6 +91,12 @@ export function getOrder(orderId) {
   return orders.get(String(orderId));
 }
 
+export function listOrders(limit = 10) {
+  return Array.from(orders.values())
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+    .slice(0, limit);
+}
+
 export function addCartItem(chatId, itemName, quantity = 1) {
   const key = String(chatId);
   const cart = (carts.get(key) || []).map(normalizeCartItem);

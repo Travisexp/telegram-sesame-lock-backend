@@ -1,7 +1,7 @@
 import { config } from './config.js';
 import { categoryNames, getCatalogItem, getCategoryItems } from './catalog.js';
 import { info, warn, error } from './logger.js';
-import { addCartItem, clearCart, createOrderRequest, getCart, getOrder, setOrderStatus } from './store.js';
+import { addCartItem, clearCart, createOrderRequest, getCart, getOrder, listOrders, setOrderStatus } from './store.js';
 import { normalizeStatus, statusChoices, STATUSES } from './statuses.js';
 import { answerCallbackQuery, sendAnimation, sendMessage } from './telegram.js';
 
@@ -205,6 +205,15 @@ function stockAvailabilityKeyboard(order) {
         { text: 'Clear Selection', callback_data: `oos_clear:${order.orderId}` }
       ]
     ]
+  };
+}
+
+function invoicePickerKeyboard(orders) {
+  return {
+    inline_keyboard: orders.map((order) => ([{
+      text: `Invoice ${order.orderId}: ${shortButtonText(orderSummary(order).replace(/\n/g, ', '))}`,
+      callback_data: `oos_menu:${order.orderId}`
+    }]))
   };
 }
 
@@ -430,7 +439,15 @@ async function sendOutOfStockPicker(chatId, orderId) {
   }
 
   if (!orderId) {
-    await sendMessage(chatId, 'Usage: /outofstock INVOICE_ID');
+    const recentOrders = listOrders(8).filter((order) => order.items?.length);
+    if (!recentOrders.length) {
+      await sendMessage(chatId, 'No recent invoices found yet.');
+      return;
+    }
+
+    await sendMessage(chatId, 'Which invoice has out-of-stock items?', {
+      reply_markup: invoicePickerKeyboard(recentOrders)
+    });
     return;
   }
 
