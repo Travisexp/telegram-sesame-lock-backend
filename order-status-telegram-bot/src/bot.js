@@ -74,6 +74,8 @@ function helpText(chatId) {
     '/setstatus INVOICE_ID approved',
     '/setstatus INVOICE_ID merchant_received',
     '/setstatus INVOICE_ID delivery',
+    '/outofstock INVOICE_ID ITEM_NAMES',
+    '/available INVOICE_ID',
     '/item INVOICE_ID'
   ].join('\n');
 }
@@ -315,6 +317,49 @@ async function notifyOrderStatus(order, status) {
   }
 }
 
+async function notifyStockAvailability(chatId, orderId, outOfStockItems) {
+  if (!isOwnerChat(chatId)) {
+    await sendMessage(chatId, 'Only the owner can send stock availability updates.');
+    return;
+  }
+
+  if (!orderId) {
+    await sendMessage(chatId, 'Usage: /outofstock INVOICE_ID ITEM_NAMES');
+    return;
+  }
+
+  const order = getOrder(orderId);
+  if (!order) {
+    await sendMessage(chatId, `No status found for invoice ${orderId}.`);
+    return;
+  }
+
+  if (!order.requesterChatId || String(order.requesterChatId) === String(config.telegram.ownerChatId)) {
+    await sendMessage(chatId, `Invoice ${orderId} has no staff requester to notify.`);
+    return;
+  }
+
+  const message = outOfStockItems.length
+    ? [
+        `Invoice ${orderId} stock update:`,
+        'Out of stock at the moment:',
+        ...outOfStockItems.map((item) => `- ${item}`),
+        '',
+        'Order:',
+        orderSummary(order)
+      ].join('\n')
+    : [
+        `Invoice ${orderId} stock update:`,
+        'All requested items are currently available.',
+        '',
+        'Order:',
+        orderSummary(order)
+      ].join('\n');
+
+  await sendMessage(order.requesterChatId, message);
+  await sendMessage(chatId, `Stock availability update sent to staff for invoice ${orderId}.`);
+}
+
 async function approveOrder(chatId, orderId, fallbackOrder = null) {
   if (!isOwnerChat(chatId)) {
     await sendMessage(chatId, 'Only the owner can approve stock requests.');
@@ -542,6 +587,24 @@ export async function handleUpdate(update) {
       case '/reject':
       case 'reject': {
         await rejectOrder(chatId, args[0]);
+        break;
+      }
+
+      case '/outofstock':
+      case 'outofstock': {
+        const orderId = args[0];
+        const outOfStockItems = args.slice(1).join(' ').split(',').map((item) => item.trim()).filter(Boolean);
+        if (!outOfStockItems.length) {
+          await sendMessage(chatId, 'Usage: /outofstock INVOICE_ID ITEM_NAMES');
+          break;
+        }
+        await notifyStockAvailability(chatId, orderId, outOfStockItems);
+        break;
+      }
+
+      case '/available':
+      case 'available': {
+        await notifyStockAvailability(chatId, args[0], []);
         break;
       }
 

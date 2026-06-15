@@ -28,6 +28,8 @@ Statuses:
 /addstaff CHAT_ID
 /approve INVOICE_ID
 /reject INVOICE_ID
+/outofstock INVOICE_ID ITEM_NAMES
+/available INVOICE_ID
 /preview pending_approval
 /preview approved
 /preview merchant_received
@@ -48,6 +50,8 @@ Examples:
 /submit
 /request Chicken Breast 10kg
 /approve 1001
+/outofstock 1001 Sprite, Coca-Cola Zero
+/available 1001
 /setstatus CHICKEN-10KG pending_approval
 /item CHICKEN-10KG
 ```
@@ -66,6 +70,13 @@ Staff can use `/items` to choose stock, pick a quantity, review `/cart`, and sen
 The cart and approval request include every invoice line as `quantity x item name`.
 
 If a staff member does not know their chat ID, they can send `/myid` to the bot and give that number to the owner.
+
+After approval, the owner can tell staff which items are unavailable:
+
+```text
+/outofstock 1001 Sprite, Coca-Cola Zero
+/available 1001
+```
 
 ## External Order Webhook
 

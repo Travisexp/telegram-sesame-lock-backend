@@ -55,6 +55,8 @@ export async function setBotCommands() {
       { command: 'addstaff', description: 'Add staff chat ID' },
       { command: 'approve', description: 'Approve item request' },
       { command: 'reject', description: 'Reject item request' },
+      { command: 'outofstock', description: 'Tell staff which invoice items are unavailable' },
+      { command: 'available', description: 'Tell staff all invoice items are available' },
       { command: 'preview', description: 'Preview a status animation' },
       { command: 'setstatus', description: 'Set item status' },
       { command: 'item', description: 'Show item status' }
