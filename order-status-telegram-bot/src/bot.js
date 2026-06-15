@@ -74,6 +74,7 @@ function helpText(chatId) {
     '/setstatus INVOICE_ID approved',
     '/setstatus INVOICE_ID merchant_received',
     '/setstatus INVOICE_ID delivery',
+    '/stockupdate',
     '/outofstock INVOICE_ID',
     '/available INVOICE_ID',
     '/item INVOICE_ID'
@@ -119,6 +120,20 @@ function categoryKeyboard() {
     })));
   }
   return { inline_keyboard: rows };
+}
+
+function ownerDashboardKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Update Staff: Out of Stock', callback_data: 'oos_start' }
+      ],
+      [
+        { text: 'Preview Merchant Received', callback_data: 'preview:merchant_received' },
+        { text: 'Preview Delivery', callback_data: 'preview:delivery' }
+      ]
+    ]
+  };
 }
 
 function itemsKeyboard(category) {
@@ -630,6 +645,21 @@ async function handleCallbackQuery(callbackQuery) {
     return;
   }
 
+  if (data === 'oos_start') {
+    await answerCallbackQuery(callbackId);
+    await sendOutOfStockPicker(chatId);
+    return;
+  }
+
+  if (data.startsWith('preview:')) {
+    const status = normalizeStatus(data.slice('preview:'.length));
+    await answerCallbackQuery(callbackId);
+    if (status) {
+      await sendStatusAnimation(chatId, status);
+    }
+    return;
+  }
+
   if (data.startsWith('oos_menu:')) {
     const orderId = data.slice('oos_menu:'.length);
     await answerCallbackQuery(callbackId);
@@ -723,7 +753,9 @@ export async function handleUpdate(update) {
           break;
         }
 
-        await sendMessage(chatId, helpText(chatId));
+        await sendMessage(chatId, helpText(chatId), {
+          reply_markup: ownerDashboardKeyboard()
+        });
         break;
 
       case '/items':
@@ -788,6 +820,12 @@ export async function handleUpdate(update) {
       case '/reject':
       case 'reject': {
         await rejectOrder(chatId, args[0]);
+        break;
+      }
+
+      case '/stockupdate':
+      case 'stockupdate': {
+        await sendOutOfStockPicker(chatId, args[0], parseApprovalMessage(message.reply_to_message?.text));
         break;
       }
 

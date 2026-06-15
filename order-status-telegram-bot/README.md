@@ -28,6 +28,7 @@ Statuses:
 /addstaff CHAT_ID
 /approve INVOICE_ID
 /reject INVOICE_ID
+/stockupdate
 /outofstock
 /available INVOICE_ID
 /preview pending_approval
@@ -51,6 +52,7 @@ Examples:
 /request Chicken Breast 10kg
 /request 2 orange juice 7 matcha 5 chai powder 15 teadrop chocolate powder 42% 2 apple juice
 /approve 1001
+/stockupdate
 /outofstock
 /outofstock 1001 Sprite, Coca-Cola Zero
 /available 1001
@@ -83,6 +85,7 @@ Staff can add one custom item, or paste multiple quantity/item pairs in one mess
 After approval, the owner can pick unavailable items with buttons:
 
 ```text
+/stockupdate
 /outofstock
 /outofstock 1001
 /outofstock 1001 Sprite, Coca-Cola Zero
