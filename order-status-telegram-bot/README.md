@@ -69,7 +69,7 @@ TELEGRAM_OWNER_CHAT_ID=your_chat_id
 TELEGRAM_STAFF_CHAT_IDS=staff_chat_id_1,staff_chat_id_2
 ```
 
-Staff can use `/items` to choose stock, pick a quantity, review `/cart`, and send `/submit`. The owner receives the pending approval animation and can reply with `/approve INVOICE_ID` or `/reject INVOICE_ID`.
+Staff can use `/items` to choose stock, pick a quantity, and review `/cart`. Each cart line has an Edit button to change its quantity or remove it. They can keep adding items before tapping Checkout or sending `/submit`. The owner receives the approval request only after checkout.
 
 The cart and approval request include every invoice line as `quantity x item name`.
 

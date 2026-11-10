@@ -118,6 +118,23 @@ export function getCart(chatId) {
   return (carts.get(String(chatId)) || []).map(normalizeCartItem);
 }
 
+export function setCartItemQuantity(chatId, index, quantity) {
+  const cart = getCart(chatId);
+  if (!Number.isInteger(index) || !cart[index] || !Number.isInteger(quantity) || quantity < 0) {
+    return false;
+  }
+
+  if (quantity === 0) {
+    cart.splice(index, 1);
+  } else {
+    cart[index].quantity = quantity;
+  }
+
+  carts.set(String(chatId), cart);
+  saveStore();
+  return true;
+}
+
 export function clearCart(chatId) {
   carts.delete(String(chatId));
   saveStore();

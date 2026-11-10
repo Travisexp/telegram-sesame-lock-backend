@@ -1,7 +1,7 @@
 import { config } from './config.js';
 import { categoryNames, getCatalogItem, getCategoryItems } from './catalog.js';
 import { info, warn, error } from './logger.js';
-import { addCartItem, clearCart, createOrderRequest, getCart, getOrder, listOrders, setOrderStatus } from './store.js';
+import { addCartItem, clearCart, createOrderRequest, getCart, getOrder, listOrders, setCartItemQuantity, setOrderStatus } from './store.js';
 import { normalizeStatus, statusChoices, STATUSES } from './statuses.js';
 import { answerCallbackQuery, sendAnimation, sendMessage } from './telegram.js';
 
@@ -190,6 +190,35 @@ function cartActionKeyboard() {
   };
 }
 
+function cartKeyboard(cart) {
+  return {
+    inline_keyboard: [
+      ...cart.map((item, index) => ([{
+        text: `Edit ${shortButtonText(`${item.quantity} x ${item.name}`)}`,
+        callback_data: `cart:edit:${index}`
+      }])),
+      ...cartActionKeyboard().inline_keyboard
+    ]
+  };
+}
+
+function cartItemKeyboard(index) {
+  return {
+    inline_keyboard: [
+      [1, 2, 3, 4, 5, 10, 20].map((quantity) => ({
+        text: String(quantity),
+        callback_data: `cart:set:${index}:${quantity}`
+      })),
+      [
+        { text: '-1', callback_data: `cart:adjust:${index}:-1` },
+        { text: '+1', callback_data: `cart:adjust:${index}:1` },
+        { text: 'Remove', callback_data: `cart:set:${index}:0` }
+      ],
+      [{ text: 'Back to Cart', callback_data: 'cart:show' }]
+    ]
+  };
+}
+
 function formatInvoiceLines(items) {
   return items.map((item, index) => `${index + 1}. ${item.quantity} x ${item.name}`);
 }
@@ -339,7 +368,7 @@ async function sendCart(chatId) {
       ...formatInvoiceLines(cart)
     ].join('\n'),
     {
-      reply_markup: cartActionKeyboard()
+      reply_markup: cartKeyboard(cart)
     }
   );
 }
@@ -629,6 +658,33 @@ async function handleCallbackQuery(callbackQuery) {
 
   if (data === 'cart:show') {
     await answerCallbackQuery(callbackId);
+    await sendCart(chatId);
+    return;
+  }
+
+  if (data.startsWith('cart:edit:')) {
+    const index = Number(data.slice('cart:edit:'.length));
+    const item = getCart(chatId)[index];
+    await answerCallbackQuery(callbackId, item ? undefined : 'Cart item no longer exists.');
+    if (item) {
+      await sendMessage(chatId, `Change quantity for:\n${item.quantity} x ${item.name}`, {
+        reply_markup: cartItemKeyboard(index)
+      });
+    }
+    return;
+  }
+
+  if (data.startsWith('cart:set:') || data.startsWith('cart:adjust:')) {
+    const [, action, indexText, amountText] = data.split(':');
+    const index = Number(indexText);
+    const amount = Number(amountText);
+    const item = getCart(chatId)[index];
+    const quantity = action === 'adjust' ? (item?.quantity || 0) + amount : amount;
+    if (!item || !setCartItemQuantity(chatId, index, quantity)) {
+      await answerCallbackQuery(callbackId, 'Cart item no longer exists.');
+      return;
+    }
+    await answerCallbackQuery(callbackId, quantity === 0 ? 'Removed.' : 'Quantity updated.');
     await sendCart(chatId);
     return;
   }
