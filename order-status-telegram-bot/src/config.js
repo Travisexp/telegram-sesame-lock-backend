@@ -36,6 +36,13 @@ export const config = {
   botMode,
   publicBaseUrl: readEnv('PUBLIC_BASE_URL'),
   orderWebhookApiKey: readEnv('ORDER_WEBHOOK_API_KEY'),
+  email: {
+    to: readEnv('ORDER_EMAIL_TO', { defaultValue: 'l.awestperth@gmail.com' }),
+    smtpHost: readEnv('SMTP_HOST'),
+    smtpPort: readIntEnv('SMTP_PORT', 465),
+    smtpUser: readEnv('SMTP_USER'),
+    smtpPassword: readEnv('SMTP_PASSWORD')
+  },
   telegram: {
     botToken: readEnv('TELEGRAM_BOT_TOKEN', { required: true }),
     allowedChatId: readEnv('TELEGRAM_ALLOWED_CHAT_ID', { required: true }),

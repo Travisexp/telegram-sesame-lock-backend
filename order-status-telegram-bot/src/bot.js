@@ -1,4 +1,5 @@
 import { config } from './config.js';
+import { sendApprovalEmail } from './email.js';
 import { categoryNames, getCatalogItem, getCategoryItems } from './catalog.js';
 import { info, warn, error } from './logger.js';
 import { addCartItem, clearCart, createOrderRequest, getCart, getOrder, listOrders, setCartItemQuantity, setOrderStatus } from './store.js';
@@ -413,6 +414,12 @@ async function submitCart(message) {
       reply_markup: approvalKeyboard(order.orderId)
     }
   );
+  try {
+    await sendApprovalEmail(order);
+  } catch (err) {
+    error('approval_email.failed', { orderId: order.orderId });
+    await sendMessage(config.telegram.ownerChatId, `Email delivery failed for invoice ${order.orderId}. Please use the Telegram approval buttons.`);
+  }
   await sendStatusAnimation(chatId, 'pending_approval', order.orderId);
 }
 
@@ -439,6 +446,28 @@ async function notifyOrderStatus(order, status) {
       );
     }
   }
+}
+
+export async function decideOrderFromEmail(orderId, action, token) {
+  const order = getOrder(orderId);
+  if (!order || order.status !== 'pending_approval' || order.emailToken !== token ||
+      !token || Date.now() > order.emailTokenExpiresAt) {
+    return false;
+  }
+
+  const status = action === 'approve' ? 'approved' : 'rejected';
+  const updated = setOrderStatus(orderId, status, {
+    emailToken: null,
+    emailTokenExpiresAt: null,
+    decidedBy: 'email'
+  });
+  if (status === 'approved') {
+    await notifyOrderStatus(updated, status);
+  } else {
+    await sendMessage(config.telegram.ownerChatId, `Invoice ${orderId} rejected by email.`);
+    await sendMessage(updated.requesterChatId, `Invoice ${orderId} rejected:\n${orderSummary(updated)}`);
+  }
+  return true;
 }
 
 async function notifyStockAvailability(chatId, orderId, outOfStockItems) {
@@ -573,7 +602,12 @@ async function approveOrder(chatId, orderId, fallbackOrder = null) {
     return;
   }
 
-  const updated = setOrderStatus(orderId, 'approved', { ...order, approvedBy: String(chatId) });
+  if (order.status !== 'pending_approval') {
+    await sendMessage(chatId, `Invoice ${orderId} is already ${order.status}.`);
+    return;
+  }
+
+  const updated = setOrderStatus(orderId, 'approved', { ...order, approvedBy: String(chatId), emailToken: null });
   await notifyOrderStatus(updated, 'approved');
 }
 
@@ -594,7 +628,12 @@ async function rejectOrder(chatId, orderId, fallbackOrder = null) {
     return;
   }
 
-  const updated = setOrderStatus(orderId, 'rejected', { ...order, rejectedBy: String(chatId) });
+  if (order.status !== 'pending_approval') {
+    await sendMessage(chatId, `Invoice ${orderId} is already ${order.status}.`);
+    return;
+  }
+
+  const updated = setOrderStatus(orderId, 'rejected', { ...order, rejectedBy: String(chatId), emailToken: null });
   await sendMessage(config.telegram.ownerChatId, `Invoice ${updated.orderId} rejected:\n${updated.itemName || 'Stock item'}`);
   if (updated.requesterChatId && String(updated.requesterChatId) !== String(config.telegram.ownerChatId)) {
     await sendMessage(updated.requesterChatId, `Invoice ${updated.orderId} rejected:\n${updated.itemName || 'Stock item'}`);

@@ -73,6 +73,14 @@ Staff can use `/items` to choose stock, pick a quantity, and review `/cart`. Eac
 
 The cart and approval request include every invoice line as `quantity x item name`.
 
+## Email Approval
+
+Set `ORDER_EMAIL_TO=l.awestperth@gmail.com`, `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_USER` to the Gmail sending address, and `SMTP_PASSWORD` to its app password in Render environment settings. Do not use the Gmail login password. Set `PUBLIC_BASE_URL` to the public service URL.
+
+Once configured, checkout emails the admin the invoice and Approve/Reject links. Each link opens a confirmation page; confirming changes the invoice and notifies staff in Telegram. Links expire after 24 hours and can only be used while the invoice is pending.
+
+Render's default temporary filesystem does not preserve invoices across deploys. Configure durable storage before depending on email approvals for orders that may remain pending through a deploy.
+
 If a staff member does not know their chat ID, they can send `/myid` to the bot and give that number to the owner.
 
 Staff can add one custom item, or paste multiple quantity/item pairs in one message:
