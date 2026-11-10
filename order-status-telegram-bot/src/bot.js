@@ -9,7 +9,8 @@ import { answerCallbackQuery, sendAnimation, sendMessage } from './telegram.js';
 const permanentStaffChatIds = [
   '8822131914',
   '8959349937',
-  '6355760940'
+  '6355760940',
+  '9059204712'
 ];
 
 const staffChatIds = new Set([
